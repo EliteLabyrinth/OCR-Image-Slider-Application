@@ -5,8 +5,9 @@ import aiohttp
 import asyncio
 
 
-async def fetch(session, url, save_path):
+async def fetch(session, url, save_path, char_to_extract_num):
     filename = os.path.basename(url)
+    filename = prepend_zeros(filename, char_to_extract_num)
     try:
         async with session.get(url) as response:
             if response.status == 200:
@@ -20,39 +21,23 @@ async def fetch(session, url, save_path):
         print(f"Exception occurred while downloading {url}: {e}")
 
 
-async def download_images(urls, save_path):
+async def download_images(urls, save_path, char_to_extract_num="."):
     async with aiohttp.ClientSession() as session:
-        tasks = [fetch(session, url, save_path) for url in urls]
+        tasks = [fetch(session, url, save_path, char_to_extract_num) for url in urls]
         await asyncio.gather(*tasks)
 
 
-def download_image(image_url, save_path):
-    """Downloads an image from the given URL and saves it to the specified path.
+def prepend_zeros(filename: str, char_to_extract_num: str = ".") -> str:
+    numeric_part, rest = filename.split(char_to_extract_num, 1)
+    # Convert the numeric part to an integer
+    num = int(numeric_part)
 
-    Args:
-        image_url (str): The URL of the image.
-        save_path (str): The path where the image should be saved.
-    """
-    # Download the image data
-    response = requests.get(image_url, stream=True)
-    print("response:->  ", response)
+    # Format the numeric part to have exactly 6 digits with leading zeros
+    new_numeric_part = f"{num:06d}"
 
-    # Check for successful download (status code 200)
-    response.raise_for_status()  # Raise an exception for bad status codes
-
-    # Get the filename from the URL (optional)
-    filename = os.path.basename(image_url)
-
-    # Create directories if needed
-    os.makedirs(save_path, exist_ok=True)
-
-    # Save the image
-    with open(save_path + f"/{filename}", "wb") as f:
-        for chunk in response.iter_content(1024):
-            # print("chunk:->   ", chunk)
-            f.write(chunk)
-
-    print(f"Image downloaded successfully: {filename}")
+    # Construct the new filename
+    new_filename = f"{new_numeric_part}-{rest}"
+    return new_filename
 
 
 def download_manhua():
@@ -74,7 +59,8 @@ def download_manhua():
 
 def download_manga():
     try:
-        save_path = r"./sampleImages/manga"
+        chapter_sepcific_path = r""
+        save_path = r"./sampleImages/manga" + chapter_sepcific_path
         if not os.path.exists(save_path):
             os.makedirs(save_path)
         image_urls = []
@@ -113,7 +99,7 @@ def download_manga():
         base_image_link = "https://cdn.kumacdn.club/wp-content/uploads/images/s/shinju-no-nectar/chapter-85/"
         for image_name in image_names:
             image_urls.append(base_image_link + image_name)
-        asyncio.run(download_images(image_urls, save_path))
+        asyncio.run(download_images(image_urls, save_path, char_to_extract_num="-"))
     except Exception as e:
         print(e)
 
