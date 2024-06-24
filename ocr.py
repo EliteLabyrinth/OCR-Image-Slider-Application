@@ -56,6 +56,7 @@ from PIL import Image, ImageDraw, ImageFont
 import os
 import numpy as np
 from paddleocr import PaddleOCR, draw_ocr
+import argparse
 
 
 def preprocess_image(img):
@@ -209,3 +210,35 @@ use_PaddleOCR(
     do_preprocess=False,
     default_draw=True,
 )
+
+
+
+def main():
+    # Create the parser
+    parser = argparse.ArgumentParser(description='Process some images for OCR.')
+
+    # Add the arguments
+    parser.add_argument('-t', '--type', choices=['manga', 'manhua', 'manhwa'], required=True,
+                        help='Type of image (manga, manhua, manhwa)')
+    parser.add_argument('-n', '--name', nargs='+', required=True,
+                        help='Name(s) of the type {manga, manhua, manhwa}')
+    parser.add_argument('-c', '--chapter', nargs='+', required=True,
+                        help='Chapter(s) to OCR')
+    parser.add_argument('-nimgs', '--numImages', type=int, required=True,
+                        help='Number of images')
+
+    # Parse the arguments
+    args = parser.parse_args()
+
+    # Process the arguments
+    print(f"Type: {args.type}")
+    print(f"Names: {args.name}")
+    print(f"Chapters: {args.chapter}")
+    print(f"Number of Images: {args.numImages}")
+
+    # Here you can add the logic to process the images based on the provided arguments
+    # For example, you could iterate over the names and chapters and perform OCR on each
+    # image in the specified chapters, up to the specified number of images.
+
+if __name__ == '__main__':
+    main()
