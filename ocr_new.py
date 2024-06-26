@@ -43,119 +43,155 @@ def drawImage(
     texts: list[str] = [],
     scores: list[float] = [],
     font_path: str = "",
-    image_save_path: str = "",
-    scalling_factor=1.0,
-    threashold=70.0,
+    scalling_factor: float = 1.0,
+    threashold: float = 0.0,
 ):
-    if img.mode == "L":
-        img = img.convert("RGB")
-    draw = ImageDraw.Draw(img)
-    # font_path = os.path.join(r"C:\Windows\Fonts", "simsun.ttc")
-    font = ImageFont.truetype(font_path, size=20)
-    if len(boxes) != len(texts) != len(scores):
-        print(
-            f"Length mismatch between ocr boxes, texts and scores for image {os.path.basename(image_save_path)}. Couldn't save the image!"
-        )
-        return
-    for box, text, score in zip(boxes, texts, scores):
-        x1, y1 = box[0]
-        x2, y2 = box[1]
-        if score <= threashold:
-            continue
-        draw.rectangle(((x1, y1), (x2, y2)), outline=(0, 255, 0), width=2)
-        draw.text(
-            (x1, y1 - 10),
-            text,
-            font=font,
-            fill=(255, 0, 0),
-            stroke_width=0,
-        )
-        draw.text(
-            (x1, y1 - 30),
-            f"{score:.0f}",
-            font=font,
-            fill=(0, 0, 255),
-            stroke_width=1,
-        )
-    img = img.resize(int(scalling_factor * s) for s in img.size)  # type: ignore
-    img.save(image_save_path)
+    try:
+        if img.mode == "L":
+            img = img.convert("RGB")
+        draw = ImageDraw.Draw(img)
+        # font_path = os.path.join(r"C:\Windows\Fonts", "simsun.ttc")
+        font = ImageFont.truetype(font_path, size=20)
+        print(boxes, texts, scores)
+        if len(boxes) != len(texts) != len(scores):
+            print("lengths mismatch!")
+            return
+
+        for box, text, score in zip(boxes, texts, scores):
+            print(box, text, score)
+            x1, y1 = box[0]
+            x2, y2 = box[1]
+            if score <= threashold:
+                continue
+            draw.rectangle(((x1, y1), (x2, y2)), outline=(0, 255, 0), width=2)
+            draw.text(
+                (x1, y1 - 10),
+                text,
+                font=font,
+                fill=(255, 0, 0),
+                stroke_width=0,
+            )
+            draw.text(
+                (x1, y1 - 30),
+                f"{score:.0f}",
+                font=font,
+                fill=(0, 0, 255),
+                stroke_width=1,
+            )
+        img = img.resize(int(scalling_factor * s) for s in img.size)  # type: ignore
+        return img
+    except Exception as e:
+        print(e)
 
 
 def use_PaddleOCR(
     image_path: str,
     lang: str,
+    font_path: str = "",
     scalling_factor: float = 1.0,
-    threashold: float = 70.0,
+    threashold: float = 0.0,
     do_preprocess: bool = False,
-    default_draw: bool = True,
+    default_draw: bool = False,
 ):
-    img = Image.open(image_path)
-    if do_preprocess:
-        img = preprocess_image(img)
-    ocr = PaddleOCR(use_angle_cls=True, lang=lang)
-    data = ocr.ocr(np.array(img))[0]
-    boxes = [line[0] for line in data]
-    texts = [line[1][0] for line in data]
-    scores = [line[1][1] for line in data]
-    if default_draw:
-        data = data[0]
-        img = Image.open(image_path).convert("RGB")
-        boxes = [line[0] for line in data]
-        txts = [line[1][0] for line in data]
-        scores = [line[1][1] for line in data]
-        print("\n\nBoxes:\t", boxes)
-        print("\n\nTexts:\t", txts)
-        print("\n\nScores:\t", scores)
-        im_show = draw_ocr(
-            img,
-            boxes,
-            txts,
-            scores,
-            font_path=os.path.join(r"C:\Windows\Fonts", "simsun.ttc"),
-        )
-        im_show = Image.fromarray(im_show)
-        im_show.save("result.jpg")
-    else:
-        tmp_text = ""
-        tmp_boxes = []
-        for box in data[0]:
-            tmp_data = {}
-            tmp_coords = box[0]
-            text, conf = box[1]
-            if len(tmp_coords) > 3:
-                x1, y1, x2, y2 = (
-                    tmp_coords[0][0],
-                    tmp_coords[0][1],
-                    tmp_coords[2][0],
-                    tmp_coords[2][1],
-                )
-                tmp_data["x1"], tmp_data["y1"], tmp_data["x2"], tmp_data["y2"] = (
-                    x1,
-                    y1,
-                    x2,
-                    y2,
-                )
-            tmp_data["text"] = text
-            tmp_data["conf"] = conf * 100
-            tmp_boxes.append(tmp_data)
-            tmp_text += text + "\n"
-        print("\n Extracted Text:\n\n", tmp_text)
-        drawImage(
-            img,
-            bboxes=tmp_boxes,
-            scalling_factor=scalling_factor,
-            threashold=threashold,
+    try:
+        from ppocr.utils.logging import get_logger  # type:ignore
+        import logging
+
+        logger = get_logger()
+        logger.setLevel(logging.ERROR)
+        img = Image.open(image_path)
+        if do_preprocess:
+            img = preprocess_image(img)
+        ocr = PaddleOCR(use_angle_cls=True, lang=lang)
+        data = ocr.ocr(np.array(img))[0]
+        boxes: list[list[list[float | int]]] = [line[0] for line in data]
+        texts: list[str] = [line[1][0] for line in data]
+        scores: list[float] = [line[1][1] for line in data]
+        img = img.convert("RGB")
+        if default_draw:
+            drawn_image = draw_ocr(img, boxes, texts, scores, font_path=font_path)
+            drawn_image = Image.fromarray(drawn_image)
+        else:
+            drawn_image = drawImage(
+                img, boxes=boxes, texts=texts, scores=scores, font_path=font_path
+            )
+        return drawn_image
+    except Exception as e:
+        print(
+            f"Exception occurred for Image {os.path.basename(image_path)} in directory {os.path.dirname(image_path)}->\n{e}"
         )
 
 
 # @parallel_executor(executor)
-def perform_ocr(image_path: str, engine: str, out_dir: str):
-    print(image_path, engine, out_dir)
-    return image_path
+def perform_ocr(image_path: str, engine: str, in_dir: str, out_dir: str):
+    try:
+        font_base_dir = r"C:\Windows\Fonts"
+        lang_dict = {
+            "japanese": {
+                "font": "msgothic.ttc",
+                "code_paddleocr": "japan",
+                "code_easyocr": "ja",
+                "code_tesseract": "jpn",
+            },
+            "chinese": {
+                "font": "simsun.ttc",
+                "code_paddleocr": "ch",
+                "code_easyocr": "ch_sim",
+                "code_tesseract": "chi_sim",
+            },
+            "english": {
+                "font": "",
+                "code_paddleocr": "en",
+                "code_easyocr": "en",
+                "code_tesseract": "eng",
+            },
+        }
+        lang = "japanese" if "manga" in image_path else "chinese"
+        image_output_path = modify_path(image_path, in_dir, out_dir)
+        create_directory_if_missing(image_output_path)
+        print(f"Performing ocr on file {os.path.basename(image_path)}...")
+        if engine == "paddleocr":
+            img = use_PaddleOCR(
+                image_path,
+                lang_dict[lang]["code_paddleocr"],
+                f"{font_base_dir}/{lang_dict[lang]['font']}",
+            )
+        else:
+            print("You should provide an ocr engine to be used")
+            return
+        if not img:
+            print(
+                f"can't perform ocr on the image -> {os.path.basename(image_path)} located in {os.path.dirname(image_path)}"
+            )
+            return
+        img.save(image_output_path)
+        print(
+            f"Successfully saved image {os.path.basename(image_output_path)} on directory {os.path.dirname(image_output_path)}"
+        )
+    except Exception as e:
+        print(
+            f"Exception occurred for Image {os.path.basename(image_path)} in directory {os.path.dirname(image_path)}->\n{e}"
+        )
 
 
-def get_image_paths(patterns: list[str], n: int) -> list[str]:
-    base_dir = "./sampleImages"
+def create_directory_if_missing(file_path: str):
+    directory = os.path.dirname(file_path)
+    if not os.path.exists(directory):
+        os.makedirs(directory, exist_ok=True)
+
+
+def modify_path(old_path: str, omit_prefix: str, new_prefix: str):
+    filename = os.path.basename(old_path)
+    remaining_path = os.path.dirname(old_path)
+
+    if remaining_path.startswith(omit_prefix):
+        remaining_path = os.path.relpath(remaining_path, omit_prefix)
+    new_path = os.path.join(new_prefix, remaining_path, filename)
+    return new_path
+
+
+def get_image_paths(patterns: list[str], n: int, source_dir: str) -> list[str]:
+    base_dir = source_dir
     image_paths: list[str] | list[None] = []
     for pattern in patterns:
         tmp_paths = glob.iglob(f"{base_dir}/{pattern}")
@@ -171,14 +207,15 @@ def get_image_paths(patterns: list[str], n: int) -> list[str]:
 
 
 def create_glob_patterns(
-    types: list[str], names: list[str], chapters: list[str]
+    types: list[str], names: list[str], chapters: list[str], files: list[str]
 ) -> list[str]:
     pattern_list: list[str] = []
     for type in types:
         for name in names:
             for chapter in chapters:
-                pattern = f"{type}/{name}/{chapter}/*"
-                pattern_list.append(pattern)
+                for file_pattern in files:
+                    pattern = f"{type}/{name}/{chapter}/{file_pattern}"
+                    pattern_list.append(pattern)
     return pattern_list
 
 
@@ -201,8 +238,10 @@ def main():
         "-n", "--names", nargs="+", help="Name(s) of the type {manga, manhua, manhwa}"
     )
     parser.add_argument("-c", "--chapters", nargs="+", help="Chapter(s) to OCR")
+    parser.add_argument("-f", "--files", nargs="+", help="File(s) to OCR")
     parser.add_argument("-nimgs", "--num_images", type=int, help="Number of images")
     parser.add_argument("-e", "--ocr_engine", type=str, help="OCR engine")
+    parser.add_argument("-i", "--in_dir", type=str, help="Base source directory")
     parser.add_argument("-o", "--out_dir", type=str, help="Base output directory")
 
     # Parse the arguments
@@ -210,8 +249,10 @@ def main():
     types: list[str] = args.types
     names: list[str] = args.names
     chapters: list[str] = args.chapters
+    files: list[str] = ["*"] if not args.files else args.files
     number_of_images: int = -1 if not args.num_images else args.num_images
     ocr_engine: str = "paddleocr" if not args.ocr_engine else args.ocr_engine
+    in_dir: str = "sampleImages" if not args.in_dir else args.in_dir
     out_dir: str = "ocr_results" if not args.out_dir else args.out_dir
     # Process the arguments
     if args.all:
@@ -227,9 +268,9 @@ def main():
         chapters = ["*"] if not chapters else chapters
 
     # create glob patterns from arguments
-    patterns = create_glob_patterns(types, names, chapters)
+    patterns = create_glob_patterns(types, names, chapters, files)
     # get image paths based on the glob patterns and arguments
-    image_paths = get_image_paths(patterns, number_of_images)
+    image_paths = get_image_paths(patterns, number_of_images, in_dir)
 
     # futures = [
     #     perform_ocr(image_path, ocr_engine, out_dir) for image_path in image_paths
@@ -248,10 +289,11 @@ def main():
                 perform_ocr,
                 image_paths,
                 [ocr_engine] * len(image_paths),
+                [in_dir] * len(image_paths),
                 [out_dir] * len(image_paths),
             )
         )
-        print(results)
+    print("ocr done...")
 
 
 if __name__ == "__main__":
