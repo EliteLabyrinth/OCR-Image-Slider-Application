@@ -7,7 +7,7 @@ import functools
 from typing import Callable, Any
 import os
 import numpy as np
-from paddleocr import PaddleOCR, draw_ocr  # type:ignore
+import traceback
 
 
 # global executor for use in the decorator
@@ -39,12 +39,12 @@ def preprocess_image(img: Image.Image, scalling_factor=2.5) -> Image.Image:
 
 def drawImage(
     img: Image.Image,
+    scalling_factor: float,
+    threashold: float,
     boxes: list[list[list[float | int]]] = [],
     texts: list[str] = [],
     scores: list[float] = [],
     font_path: str = "",
-    scalling_factor: float = 1.0,
-    threashold: float = 0.0,
 ):
     try:
         if img.mode == "L":
@@ -52,18 +52,16 @@ def drawImage(
         draw = ImageDraw.Draw(img)
         # font_path = os.path.join(r"C:\Windows\Fonts", "simsun.ttc")
         font = ImageFont.truetype(font_path, size=20)
-        print(boxes, texts, scores)
         if len(boxes) != len(texts) != len(scores):
             print("lengths mismatch!")
-            return
+            return img
 
         for box, text, score in zip(boxes, texts, scores):
-            print(box, text, score)
             x1, y1 = box[0]
-            x2, y2 = box[1]
             if score <= threashold:
                 continue
-            draw.rectangle(((x1, y1), (x2, y2)), outline=(0, 255, 0), width=2)
+            draw.polygon(xy=[(x, y) for x, y in box], outline=(255, 0, 0), width=2)
+            # draw.rectangle(((x1, y1), (x2, y2)), outline=(0, 255, 0), width=2)
             draw.text(
                 (x1, y1 - 10),
                 text,
@@ -82,28 +80,133 @@ def drawImage(
         return img
     except Exception as e:
         print(e)
+        print(traceback.print_exc())
+        return img
+
+
+def use_Tesseract(
+    image_path: str,
+    lang: str,
+    font_path,
+    scalling_factor: float,
+    threashold: float,
+    do_preprocess: bool = False,
+):
+    try:
+        import pytesseract
+
+        CONFIG = "--oem 1 --psm 3"
+
+        print(f"Performing ocr on file {os.path.basename(image_path)}...")
+        img = Image.open(image_path)
+        if do_preprocess:
+            img = preprocess_image(img)
+
+        data = pytesseract.image_to_data(img, lang=lang, config=CONFIG).split("\n")[1:]
+        if not data:
+            return img
+        boxes: list[list[list[float | int]]] = []
+        texts: list[str] = []
+        scores: list[float] = []
+        for line in data:
+            line_list = line.split("\t")
+            if len(line_list) <= 11:
+                continue
+            x1, y1, w, h = (
+                int(line_list[6]),
+                int(line_list[7]),
+                int(line_list[8]),
+                int(line_list[9]),
+            )
+            boxes.append([[x1, y1], [x1 + w, y1], [x1 + w, y1 + h], [x1, y1 + h]])
+            texts.append(line_list[11])
+            scores.append(
+                float(line_list[10]) if line_list[10] else 0.0,
+            )
+        img = img.convert("RGB")
+        drawn_image = drawImage(
+            img,
+            scalling_factor,
+            threashold,
+            boxes=boxes,
+            texts=texts,
+            scores=scores,
+            font_path=font_path,
+        )
+        return drawn_image
+
+    except Exception as e:
+        print(
+            f"Exception occurred for Image {os.path.basename(image_path)} in directory {os.path.dirname(image_path)}->\n{e}"
+        )
+        print(traceback.print_exc())
+
+
+def use_EasyOCR(
+    image_path: str,
+    lang: str,
+    font_path,
+    scalling_factor: float,
+    threashold: float,
+    do_preprocess: bool = False,
+):
+    try:
+        import easyocr
+
+        print(f"Performing ocr on file {os.path.basename(image_path)}...")
+        img = Image.open(image_path)
+        if do_preprocess:
+            img = preprocess_image(img)
+        reader = easyocr.Reader(["en", lang])
+        data = reader.readtext(np.array(img) if img.mode == "L" else img)
+        if not data:
+            return img
+        boxes: list[list[list[float | int]]] = [line[0] for line in data]
+        texts: list[str] = [line[1] for line in data]
+        scores: list[float] = [line[2] for line in data]
+        img = img.convert("RGB")
+        drawn_image = drawImage(
+            img,
+            scalling_factor,
+            threashold,
+            boxes=boxes,
+            texts=texts,
+            scores=scores,
+            font_path=font_path,
+        )
+        return drawn_image
+    except Exception as e:
+        print(
+            f"Exception occurred for Image {os.path.basename(image_path)} in directory {os.path.dirname(image_path)}->\n{e}"
+        )
+        print(traceback.print_exc())
 
 
 def use_PaddleOCR(
     image_path: str,
     lang: str,
-    font_path: str = "",
-    scalling_factor: float = 1.0,
-    threashold: float = 0.0,
+    font_path,
+    scalling_factor: float,
+    threashold: float,
     do_preprocess: bool = False,
     default_draw: bool = False,
 ):
     try:
+        from paddleocr import PaddleOCR, draw_ocr  # type:ignore
         from ppocr.utils.logging import get_logger  # type:ignore
         import logging
 
         logger = get_logger()
         logger.setLevel(logging.ERROR)
+
+        print(f"Performing ocr on file {os.path.basename(image_path)}...")
         img = Image.open(image_path)
         if do_preprocess:
             img = preprocess_image(img)
         ocr = PaddleOCR(use_angle_cls=True, lang=lang)
         data = ocr.ocr(np.array(img))[0]
+        if not data:
+            return img
         boxes: list[list[list[float | int]]] = [line[0] for line in data]
         texts: list[str] = [line[1][0] for line in data]
         scores: list[float] = [line[1][1] for line in data]
@@ -113,17 +216,31 @@ def use_PaddleOCR(
             drawn_image = Image.fromarray(drawn_image)
         else:
             drawn_image = drawImage(
-                img, boxes=boxes, texts=texts, scores=scores, font_path=font_path
+                img,
+                scalling_factor,
+                threashold,
+                boxes=boxes,
+                texts=texts,
+                scores=scores,
+                font_path=font_path,
             )
         return drawn_image
     except Exception as e:
         print(
             f"Exception occurred for Image {os.path.basename(image_path)} in directory {os.path.dirname(image_path)}->\n{e}"
         )
+        print(traceback.print_exc())
 
 
 # @parallel_executor(executor)
-def perform_ocr(image_path: str, engine: str, in_dir: str, out_dir: str):
+def perform_ocr(
+    image_path: str,
+    engine: str,
+    in_dir: str,
+    out_dir: str,
+    scalling_factor: float,
+    threashold: float,
+):
     try:
         font_base_dir = r"C:\Windows\Fonts"
         lang_dict = {
@@ -147,17 +264,36 @@ def perform_ocr(image_path: str, engine: str, in_dir: str, out_dir: str):
             },
         }
         lang = "japanese" if "manga" in image_path else "chinese"
-        image_output_path = modify_path(image_path, in_dir, out_dir)
+        image_output_path = modify_path(image_path, in_dir, out_dir, engine)
         create_directory_if_missing(image_output_path)
-        print(f"Performing ocr on file {os.path.basename(image_path)}...")
         if engine == "paddleocr":
             img = use_PaddleOCR(
                 image_path,
                 lang_dict[lang]["code_paddleocr"],
                 f"{font_base_dir}/{lang_dict[lang]['font']}",
+                scalling_factor,
+                threashold,
+            )
+        elif engine == "easyocr":
+            img = use_EasyOCR(
+                image_path,
+                lang_dict[lang]["code_easyocr"],
+                f"{font_base_dir}/{lang_dict[lang]['font']}",
+                scalling_factor,
+                threashold,
+            )
+        elif engine == "tesseract":
+            img = use_Tesseract(
+                image_path,
+                lang_dict[lang]["code_tesseract"],
+                f"{font_base_dir}/{lang_dict[lang]['font']}",
+                scalling_factor,
+                threashold,
             )
         else:
-            print("You should provide an ocr engine to be used")
+            print(
+                "You should provide an ocr engine to be used. supported engines are: tesseract, easyocr and paddleocr"
+            )
             return
         if not img:
             print(
@@ -172,6 +308,7 @@ def perform_ocr(image_path: str, engine: str, in_dir: str, out_dir: str):
         print(
             f"Exception occurred for Image {os.path.basename(image_path)} in directory {os.path.dirname(image_path)}->\n{e}"
         )
+        print(traceback.print_exc())
 
 
 def create_directory_if_missing(file_path: str):
@@ -180,13 +317,13 @@ def create_directory_if_missing(file_path: str):
         os.makedirs(directory, exist_ok=True)
 
 
-def modify_path(old_path: str, omit_prefix: str, new_prefix: str):
+def modify_path(old_path: str, omit_prefix: str, new_prefix: str, engine: str):
     filename = os.path.basename(old_path)
     remaining_path = os.path.dirname(old_path)
 
     if remaining_path.startswith(omit_prefix):
         remaining_path = os.path.relpath(remaining_path, omit_prefix)
-    new_path = os.path.join(new_prefix, remaining_path, filename)
+    new_path = os.path.join(new_prefix, remaining_path, f"{engine}_results", filename)
     return new_path
 
 
@@ -243,6 +380,18 @@ def main():
     parser.add_argument("-e", "--ocr_engine", type=str, help="OCR engine")
     parser.add_argument("-i", "--in_dir", type=str, help="Base source directory")
     parser.add_argument("-o", "--out_dir", type=str, help="Base output directory")
+    parser.add_argument(
+        "-scf",
+        "--scalling_factor",
+        type=float,
+        help="Images will be scaled proportional to this factor",
+    )
+    parser.add_argument(
+        "-th",
+        "--threashold",
+        type=float,
+        help="OCR results with confidence score less than this threshold will not show up in the saved image",
+    )
 
     # Parse the arguments
     args = parser.parse_args()
@@ -254,6 +403,8 @@ def main():
     ocr_engine: str = "paddleocr" if not args.ocr_engine else args.ocr_engine
     in_dir: str = "sampleImages" if not args.in_dir else args.in_dir
     out_dir: str = "ocr_results" if not args.out_dir else args.out_dir
+    scalling_factor: float = 1.0 if not args.scalling_factor else args.scalling_factor
+    threashold: float = 0.0 if not args.threashold else args.threashold
     # Process the arguments
     if args.all:
         print("Processing all images...")
@@ -291,6 +442,8 @@ def main():
                 [ocr_engine] * len(image_paths),
                 [in_dir] * len(image_paths),
                 [out_dir] * len(image_paths),
+                [scalling_factor] * len(image_paths),
+                [threashold] * len(image_paths),
             )
         )
     print("ocr done...")

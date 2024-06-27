@@ -125,6 +125,9 @@ def use_PaddleOCR(
         boxes = [line[0] for line in data]
         txts = [line[1][0] for line in data]
         scores = [line[1][1] for line in data]
+        print("\n\nBoxes:\t", boxes)
+        print("\n\nTexts:\t", txts)
+        print("\n\nScores:\t", scores)
         im_show = draw_ocr(
             img,
             boxes,
@@ -167,19 +170,14 @@ def use_PaddleOCR(
         )
 
 
-if __name__=="__main__":
-    
-def ocr_manga():
-    pass
-
-def ocr_manhua():
-    pass
-MANGA_IMAGES_DIR = r"C:\Workspace\Learning\Projects\Anuvad\python\sampleImages\manga"
-MANHUA_IMAGES_DIR = r"C:\Workspace\Learning\Projects\Anuvad\python\sampleImages\manhua"
+MANGA_IMAGES_DIR = r"C:\Workspace\Learning\Projects\Anuvad\python\sampleImages\manga\shinju_no_necktar\chapter_0085"
+MANHUA_IMAGES_DIR = r"C:\Workspace\Learning\Projects\Anuvad\python\sampleImages\manhua\my_harem_grew_so_large\chapter_0001"
 manga_images = os.listdir(MANGA_IMAGES_DIR)
-manga_images_sorted = sorted(manga_images, key=lambda x: int(x.split("-")[0]))
+manga_images_sorted = sorted(manga_images)
 manhua_images = os.listdir(MANHUA_IMAGES_DIR)
-manhua_images_sorted = sorted(manhua_images, key=lambda x: int(x.split(".")[0]))
+manhua_images_sorted = sorted(manhua_images)
+print(manga_images, manhua_images)
+
 # print("Manga Images in Sorted Order:\n", manga_images_sorted, "\n\n")
 # print("Manhua Images in Sorted Order:\n", manhua_images_sorted, "\n\n")
 img_idx = 8
@@ -212,33 +210,32 @@ use_PaddleOCR(
 )
 
 
+# def main():
+#     # Create the parser
+#     parser = argparse.ArgumentParser(description='Process some images for OCR.')
 
-def main():
-    # Create the parser
-    parser = argparse.ArgumentParser(description='Process some images for OCR.')
+#     # Add the arguments
+#     parser.add_argument('-t', '--type', choices=['manga', 'manhua', 'manhwa'], required=True,
+#                         help='Type of image (manga, manhua, manhwa)')
+#     parser.add_argument('-n', '--name', nargs='+', required=True,
+#                         help='Name(s) of the type {manga, manhua, manhwa}')
+#     parser.add_argument('-c', '--chapter', nargs='+', required=True,
+#                         help='Chapter(s) to OCR')
+#     parser.add_argument('-nimgs', '--numImages', type=int, required=True,
+#                         help='Number of images')
 
-    # Add the arguments
-    parser.add_argument('-t', '--type', choices=['manga', 'manhua', 'manhwa'], required=True,
-                        help='Type of image (manga, manhua, manhwa)')
-    parser.add_argument('-n', '--name', nargs='+', required=True,
-                        help='Name(s) of the type {manga, manhua, manhwa}')
-    parser.add_argument('-c', '--chapter', nargs='+', required=True,
-                        help='Chapter(s) to OCR')
-    parser.add_argument('-nimgs', '--numImages', type=int, required=True,
-                        help='Number of images')
+#     # Parse the arguments
+#     args = parser.parse_args()
 
-    # Parse the arguments
-    args = parser.parse_args()
+#     # Process the arguments
+#     print(f"Type: {args.type}")
+#     print(f"Names: {args.name}")
+#     print(f"Chapters: {args.chapter}")
+#     print(f"Number of Images: {args.numImages}")
 
-    # Process the arguments
-    print(f"Type: {args.type}")
-    print(f"Names: {args.name}")
-    print(f"Chapters: {args.chapter}")
-    print(f"Number of Images: {args.numImages}")
+#     # Here you can add the logic to process the images based on the provided arguments
+#     # For example, you could iterate over the names and chapters and perform OCR on each
+#     # image in the specified chapters, up to the specified number of images.
 
-    # Here you can add the logic to process the images based on the provided arguments
-    # For example, you could iterate over the names and chapters and perform OCR on each
-    # image in the specified chapters, up to the specified number of images.
-
-if __name__ == '__main__':
-    main()
+# if __name__ == '__main__':
+#     main()
